@@ -86,3 +86,18 @@ python eval_science.py \
   --model_path <path_to_trained_model> \
   --output_dir <output_path>
 ```
+
+### 5. Forgetting Evaluation
+
+To produce the forgetting metrics in the paper we use the [Language Model Evaluation Harness](https://github.com/EleutherAI/lm-evaluation-harness) by Eleuther AI.
+
+To reproduce the results please install the specific commit we have used:
+```bash
+pip install git+https://github.com/EleutherAI/lm-evaluation-harness@03c44adc0586f88bb343a74da1a1c602103536dd
+```
+
+and run the following command:
+
+```bash
+lm_eval --model hf --model_args pretrained=<path_to_your_model> --output_path <output_dir> --confirm_run_unsafe_code --tasks hellaswag,mmlu,truthfulqa,winogrande,humaneval,ifeval
+```
