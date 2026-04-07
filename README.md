@@ -6,6 +6,8 @@ This is TRL-based code for reproducing the On-Policy Self-Distillation algorithm
 
 ### Updates
 
+04/07/26: after some investigation, we've found that all the results in our paper were produced using on-policy sampling, but per-token forward KL loss (similar to the [GKD paper](https://arxiv.org/abs/2306.13649)). Therefore, this is the default argument in this repo, and we will update the arXiv version soon with clarification.
+
 03/12/26: added the science dataset and evaluation pipeline, regenerated the tool-use dataset, and added an updated tool-use evaluation file. I'll upload the Medical and Wiki datasets soon.
 
 ## Abstract
