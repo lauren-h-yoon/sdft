@@ -23,6 +23,8 @@ def parse_args():
                         help="LoRA rank (0 = full-param training, default).")
     parser.add_argument("--lora_alpha", type=int, default=None,
                         help="LoRA alpha (default: 2 * lora_rank).")
+    parser.add_argument("--lora_target_modules", type=str, default="all-linear",
+                        help="LoRA target_modules: 'all-linear' or comma-separated list.")
     parser.add_argument("--max_steps", type=int, default=-1,
                         help="Max training steps; -1 uses num_train_epochs.")
     parser.add_argument("--report_to", type=str, default="wandb",
@@ -104,11 +106,13 @@ if __name__ == "__main__":
     if args.lora_rank > 0:
         from peft import LoraConfig, get_peft_model, TaskType
         lora_alpha = args.lora_alpha if args.lora_alpha is not None else 2 * args.lora_rank
+        tm_arg = args.lora_target_modules
+        lora_targets = tm_arg if tm_arg == "all-linear" else [s.strip() for s in tm_arg.split(",") if s.strip()]
         lora_cfg = LoraConfig(
             r=args.lora_rank,
             lora_alpha=lora_alpha,
             lora_dropout=0.05,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+            target_modules=lora_targets,
             task_type=TaskType.CAUSAL_LM,
         )
         model = get_peft_model(model, lora_cfg)
