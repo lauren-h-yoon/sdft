@@ -18,6 +18,15 @@ def parse_args():
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="Model name")
     parser.add_argument("--dataset_name", type=str, default="tooluse", help="Dataset name", choices=["tooluse", "science"])
     parser.add_argument("--seed", type=int, default=42, help="Seed")
+    # crack-coconut patch: LoRA + max_steps so we can match scale across baselines
+    parser.add_argument("--lora_rank", type=int, default=0,
+                        help="LoRA rank (0 = full-param training, default).")
+    parser.add_argument("--lora_alpha", type=int, default=None,
+                        help="LoRA alpha (default: 2 * lora_rank).")
+    parser.add_argument("--max_steps", type=int, default=-1,
+                        help="Max training steps; -1 uses num_train_epochs.")
+    parser.add_argument("--report_to", type=str, default="wandb",
+                        help="HF Trainer report_to (wandb|none|tensorboard).")
     return parser.parse_args()
 
 def load_tooluse_dataset(seed=42) -> Dataset:
@@ -90,6 +99,21 @@ if __name__ == "__main__":
         torch_dtype=torch.bfloat16,
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    # crack-coconut patch: optionally wrap student in LoRA so trainable params
+    # match the other baselines (crack_coconut / SDPO) for fair compute parity.
+    if args.lora_rank > 0:
+        from peft import LoraConfig, get_peft_model, TaskType
+        lora_alpha = args.lora_alpha if args.lora_alpha is not None else 2 * args.lora_rank
+        lora_cfg = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=lora_alpha,
+            lora_dropout=0.05,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+            task_type=TaskType.CAUSAL_LM,
+        )
+        model = get_peft_model(model, lora_cfg)
+        print(f"[sdft-cc-patch] wrapped student in LoRA (r={args.lora_rank}, alpha={lora_alpha})")
+        model.print_trainable_parameters()
     if args.dataset_name == "tooluse":
         dataset, _ = load_tooluse_dataset(args.seed)
     elif args.dataset_name == "science":
@@ -115,14 +139,18 @@ if __name__ == "__main__":
         max_prompt_length = 1024,
         max_completion_length = 1024,
         num_train_epochs = args.num_train_epochs,
+        max_steps = args.max_steps,
         num_iterations = 1,
         num_generations = 1,
         save_steps = 100,
         max_grad_norm = 1,
-        report_to = "wandb",
+        report_to = args.report_to,
         output_dir = args.output_dir,
         log_completions = False, # True for debugging
-        sync_ref_model = True,
+        # crack-coconut patch: ref-model sync (EMA toward student) is incompatible
+        # with LoRA — the per-param shape mismatch (rank vs hidden_size) crashes
+        # _sync_param. With LoRA, freeze the reference at base weights instead.
+        sync_ref_model = (args.lora_rank == 0),
         ref_model_sync_steps = 1,
         ref_model_mixup_alpha = args.ref_model_mixup_alpha,
         vllm_importance_sampling_correction = True,
